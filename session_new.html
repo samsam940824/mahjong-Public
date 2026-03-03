@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記一場 - API 版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            padding: 12px 15px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            width: 100%;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+        }
+
+        .player-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
+        }
+
+        .player-name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .player-input-wrapper {
+            flex: 1;
+            text-align: right;
+        }
+
+        .player-input {
+            width: 100px;
+            padding: 8px;
+            text-align: right;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1.1rem;
+        }
+
+        .summary-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .summary-total {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: green;
+        }
+
+        .summary-total.error {
+            color: #e74c3c;
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .badge-new {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .badge-update {
+            background-color: #f39c12;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="/">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div id="msgAlert" class="alert alert-danger"></div>
+
+        <div class="card">
+            <h3>
+                📝 紀錄戰績
+                <span id="statusBadge" class="badge badge-new">新增紀錄</span>
+            </h3>
+
+            <form id="recordForm" onsubmit="submitSession(event)">
+                <div class="form-group">
+                    <label>📅 日期</label>
+                    <input type="date" id="sessionDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>📝 備註 (可選，如：底台 300/100、地點)</label>
+                    <input type="text" id="sessionNote" placeholder="例如：在家裡打、底台300/100">
+                </div>
+
+                <div
+                    style="margin-top: 25px; margin-bottom: 10px; font-weight: bold; color: #555; border-bottom: 2px solid #eee; padding-bottom: 5px;">
+                    👥 輸入玩家輸贏 (贏填正，輸填負，沒打留空)
+                </div>
+
+                <div id="playersContainer">
+                    <div style="text-align: center; padding: 20px; color: #888;">載入玩家名單中...</div>
+                </div>
+
+                <div class="summary-box">
+                    <div>目前加總 (必須為 0)</div>
+                    <div id="totalSum" class="summary-total">0</div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn">🚀 儲存戰績</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let errorTimeout;
+        let currentSessionId = null;
+
+        function showMessage(msg, isSuccess = false) {
+            const alertEl = document.getElementById('msgAlert');
+            alertEl.textContent = msg;
+            alertEl.className = isSuccess ? 'alert alert-success' : 'alert alert-danger';
+            alertEl.style.display = 'block';
+
+            clearTimeout(errorTimeout);
+            errorTimeout = setTimeout(() => {
+                alertEl.style.display = 'none';
+            }, 5000);
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 更新加總
+        function updateTotal() {
+            const inputs = document.querySelectorAll('.player-input');
+            let total = 0;
+            inputs.forEach(input => {
+                if (input.value) {
+                    total += parseInt(input.value) || 0;
+                }
+            });
+
+            const sumEl = document.getElementById('totalSum');
+            sumEl.textContent = total;
+
+            if (total === 0) {
+                sumEl.className = 'summary-total';
+            } else {
+                sumEl.className = 'summary-total error';
+            }
+        }
+
+        // 取得玩家列表並生成 UI
+        async function loadPlayers() {
+            try {
+                const { data: activePlayers, error } = await window.sb.from('players').select('*').eq('active', true).order('name');
+                if (error) throw error;
+
+                const container = document.getElementById('playersContainer');
+                container.innerHTML = '';
+
+                if (!activePlayers || activePlayers.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding: 20px; color: #888;">目前沒有啟用的玩家，請先前往「玩家」設定新增。</div>';
+                    return;
+                }
+
+                activePlayers.forEach(p => {
+                    const row = document.createElement('div');
+                    row.className = 'player-row';
+
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'player-name';
+                    nameDiv.textContent = `${p.name} (${p.type === 'fixed' ? '固定' : '訪客'})`;
+
+                    const inputWrapper = document.createElement('div');
+                    inputWrapper.className = 'player-input-wrapper';
+
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.className = 'player-input';
+                    input.placeholder = '0';
+                    input.dataset.playerId = p.id;
+
+                    // 每次輸入更新加總
+                    input.addEventListener('input', updateTotal);
+
+                    inputWrapper.appendChild(input);
+                    row.appendChild(nameDiv);
+                    row.appendChild(inputWrapper);
+
+                    container.appendChild(row);
+                });
+
+                // 初始化完成後，檢查今天日期
+                checkSessionData();
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('playersContainer').innerHTML =
+                    '<div style="color:red; text-align:center;">載入玩家失敗：' + e.message + '</div>';
+            }
+        }
+
+        // 檢查指定日期是否已有場次
+        async function checkSessionData() {
+            const dateInput = document.getElementById('sessionDate');
+            const dateVal = dateInput.value;
+            if (!dateVal) return;
+
+            try {
+                const badge = document.getElementById('statusBadge');
+                const submitBtn = document.getElementById('submitBtn');
+                const noteInput = document.getElementById('sessionNote');
+
+                // 先清空所有輸入框
+                document.querySelectorAll('.player-input').forEach(input => input.value = '');
+                noteInput.value = '';
+                currentSessionId = null;
+
+                const { data: session, error } = await window.sb.from('sessions').select('*, ledgers(*)').eq('date', dateVal).maybeSingle();
+
+                if (error) {
+                    throw error;
+                }
+
+                if (session) {
+                    currentSessionId = session.id;
+                    // 已存在，填入資料
+                    badge.className = 'badge badge-update';
+                    badge.textContent = '更新紀錄';
+                    submitBtn.className = 'btn btn-warning';
+                    submitBtn.textContent = '🔄 更新戰績';
+
+                    if (session.note) noteInput.value = session.note;
+
+                    // 填入分數
+                    if (session.ledgers) {
+                        session.ledgers.forEach(l => {
+                            const input = document.querySelector(`.player-input[data-player-id="${l.player_id}"]`);
+                            if (input) input.value = l.delta;
+                        });
+                    }
+                } else {
+                    // 不存在，新增模式
+                    badge.className = 'badge badge-new';
+                    badge.textContent = '新增紀錄';
+                    submitBtn.className = 'btn';
+                    submitBtn.textContent = '🚀 儲存戰績';
+                }
+
+                updateTotal();
+
+            } catch (e) {
+                console.error("檢查日期失敗", e);
+                showMessage("檢查日期失敗: " + e.message);
+            }
+        }
+
+        // 送出表單
+        async function submitSession(e) {
+            e.preventDefault();
+
+            const date = document.getElementById('sessionDate').value;
+            const note = document.getElementById('sessionNote').value || null;
+
+            const inputs = document.querySelectorAll('.player-input');
+            const ledgersData = [];
+            let hasValue = false;
+            let sum = 0;
+
+            inputs.forEach(input => {
+                const val = input.value.trim();
+                if (val && val !== '0') {
+                    hasValue = true;
+                }
+                if (val) {
+                    const delta = parseInt(val);
+                    sum += delta;
+                    ledgersData.push({
+                        player_id: parseInt(input.dataset.playerId),
+                        delta: delta
+                    });
+                }
+            });
+
+            if (!hasValue) {
+                showMessage("至少需要輸入一筆有效的玩家分數");
+                return;
+            }
+
+            if (sum !== 0) {
+                showMessage("所有玩家輸贏加總必須為 0");
+                return;
+            }
+
+            try {
+                if (currentSessionId) {
+                    // 更新模式 (Update)
+                    const { error: sErr } = await window.sb.from('sessions').update({ note }).eq('id', currentSessionId);
+                    if (sErr) throw sErr;
+
+                    const { error: delErr } = await window.sb.from('ledgers').delete().eq('session_id', currentSessionId);
+                    if (delErr) throw delErr;
+
+                    const newLedgersData = ledgersData.map(l => ({ ...l, session_id: currentSessionId }));
+                    const { error: lErr } = await window.sb.from('ledgers').insert(newLedgersData);
+                    if (lErr) throw lErr;
+                } else {
+                    // 新增模式 (Insert)
+                    const { data: newSession, error: sErr } = await window.sb.from('sessions').insert([{ date, note }]).select().single();
+                    if (sErr) throw sErr;
+
+                    const newLedgersData = ledgersData.map(l => ({ ...l, session_id: newSession.id }));
+                    const { error: lErr } = await window.sb.from('ledgers').insert(newLedgersData);
+                    if (lErr) {
+                        // Rollback
+                        await window.sb.from('sessions').delete().eq('id', newSession.id);
+                        throw lErr;
+                    }
+                }
+
+                alert('戰績儲存成功！');
+                checkSessionData();
+            } catch (e) {
+                console.error(e);
+                showMessage("儲存失敗：" + e.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 預設日期為今天
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('sessionDate');
+            dateInput.value = today;
+
+            // 綁定日期變更事件
+            dateInput.addEventListener('change', checkSessionData);
+
+            // 載入玩家
+            loadPlayers();
+        });
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>儀表板 - API 版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h3 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        .tab-nav {
+            display: flex;
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab-btn.active {
+            border-bottom: 3px solid #3498db;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .score-positive {
+            color: green;
+            font-weight: bold;
+        }
+
+        .score-negative {
+            color: red;
+            font-weight: bold;
+        }
+
+        .score-neutral {
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="./index.html">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家</a>
+        <a href="./query.html">查詢</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h3>🏆 戰績排行榜 (Top 5)</h3>
+
+            <div class="tab-nav">
+                <div class="tab-btn active" onclick="switchDashTab('month')">本月戰績</div>
+                <div class="tab-btn" onclick="switchDashTab('year')">今年戰績</div>
+                <div class="tab-btn" onclick="switchDashTab('total')">總累積</div>
+            </div>
+
+            <div id="tab-month" class="tab-content active">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>玩家</th>
+                            <th style="text-align: right;">總輸贏</th>
+                        </tr>
+                    </thead>
+                    <tbody id="month-tbody"></tbody>
+                </table>
+            </div>
+
+            <div id="tab-year" class="tab-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>玩家</th>
+                            <th style="text-align: right;">總輸贏</th>
+                        </tr>
+                    </thead>
+                    <tbody id="year-tbody"></tbody>
+                </table>
+            </div>
+
+            <div id="tab-total" class="tab-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>玩家</th>
+                            <th style="text-align: right;">總輸贏</th>
+                        </tr>
+                    </thead>
+                    <tbody id="total-tbody"></tbody>
+                </table>
+            </div>
+
+            <div style="text-align: right; margin-top: 15px;">
+                <a href="query.html" style="color: #3498db; text-decoration: none;">➔ 查看完整排行</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🕒 近期場次</h3>
+            <table style="width:100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #eee; text-align: left;">
+                        <th style="padding: 10px;">日期</th>
+                        <th style="padding: 10px;">參與人數</th>
+                        <th style="padding: 10px;">備註</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-sessions-tbody">
+                </tbody>
+            </table>
+
+            <div style="text-align: right; margin-top: 15px;">
+                <a href="session_new.html" style="color: #27ae60; text-decoration: none; font-weight: bold;">➕ 記錄新戰績</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        function escapeHTML(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function switchDashTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+
+            const buttons = document.querySelectorAll('.tab-btn');
+            if (tabId === 'month') buttons[0].classList.add('active');
+            if (tabId === 'year') buttons[1].classList.add('active');
+            if (tabId === 'total') buttons[2].classList.add('active');
+        }
+
+        function renderStatsTable(tbodyId, dataList) {
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = '';
+            if (!dataList || dataList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding: 20px; color:#999;">目前無資料</td></tr>';
+                return;
+            }
+
+            dataList.forEach(stat => {
+                const tr = document.createElement('tr');
+
+                const tdPlayer = document.createElement('td');
+                tdPlayer.innerHTML = `${escapeHTML(stat.name)} ${stat.type === 'guest' ? '<span style="font-size:0.8em; color:#999;">(客)</span>' : ''}`;
+
+                const tdScore = document.createElement('td');
+                tdScore.style.textAlign = 'right';
+                tdScore.textContent = stat.total_score;
+                tdScore.className = stat.total_score > 0 ? 'score-positive' : (stat.total_score < 0 ? 'score-negative' : 'score-neutral');
+
+                tr.appendChild(tdPlayer);
+                tr.appendChild(tdScore);
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderSessions(sessionsList) {
+            const tbody = document.getElementById('recent-sessions-tbody');
+            tbody.innerHTML = '';
+
+            if (!sessionsList || sessionsList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color:#999;">目前無場次紀錄</td></tr>';
+                return;
+            }
+
+            sessionsList.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #eee';
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => window.location.href = `query.html?tab=session&date=${s.date}`;
+
+                // Hover effect can be added in CSS, but inline logic simplifies
+                tr.onmouseover = () => tr.style.backgroundColor = '#f9f9f9';
+                tr.onmouseout = () => tr.style.backgroundColor = '';
+
+                const tdDate = document.createElement('td');
+                tdDate.style.padding = '10px';
+                tdDate.textContent = s.date;
+
+                const tdCount = document.createElement('td');
+                tdCount.style.padding = '10px';
+                tdCount.textContent = s.total_players;
+
+                const tdNote = document.createElement('td');
+                tdNote.style.padding = '10px';
+                tdNote.style.color = '#888';
+                tdNote.textContent = s.note || '';
+
+                tr.appendChild(tdDate);
+                tr.appendChild(tdCount);
+                tr.appendChild(tdNote);
+                tbody.appendChild(tr);
+            });
+        }
+
+        function calculateRanking(ledgers, filterDateFn) {
+            const scores = {};
+            ledgers.forEach(l => {
+                if (filterDateFn(l.sessions.date)) {
+                    const p = l.players;
+                    if (!p) return;
+                    if (!scores[p.id]) {
+                        scores[p.id] = { name: p.name, type: p.type, total_score: 0 };
+                    }
+                    scores[p.id].total_score += l.delta;
+                }
+            });
+            const sorted = Object.values(scores).sort((a, b) => b.total_score - a.total_score);
+            return sorted.slice(0, 5);
+        }
+
+        async function loadDashboard() {
+            try {
+                const { data: ledgers, error: lErr } = await window.sb.from('ledgers').select('delta, players(id, name, type), sessions(date)');
+                if (lErr) throw lErr;
+
+                const today = new Date();
+                const currentMonth = today.toISOString().slice(0, 7); // YYYY-MM
+                const currentYear = today.toISOString().slice(0, 4); // YYYY
+
+                const stats_month = calculateRanking(ledgers, (dateStr) => dateStr.startsWith(currentMonth));
+                const stats_year = calculateRanking(ledgers, (dateStr) => dateStr.startsWith(currentYear));
+                const stats_total = calculateRanking(ledgers, (dateStr) => true);
+
+                renderStatsTable('month-tbody', stats_month);
+                renderStatsTable('year-tbody', stats_year);
+                renderStatsTable('total-tbody', stats_total);
+
+                const { data: sessions, error: sErr } = await window.sb.from('sessions').select('*, ledgers(id)').order('date', { ascending: false }).limit(5);
+                if (sErr) throw sErr;
+
+                const recent_sessions = sessions.map(s => ({
+                    ...s,
+                    total_players: s.ledgers ? s.ledgers.length : 0
+                }));
+                renderSessions(recent_sessions);
+            } catch (e) {
+                console.error('載入儀表板失敗:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+
+</body>
+
+</html>

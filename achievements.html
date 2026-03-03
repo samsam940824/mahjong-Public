@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人成就紀錄 - API 版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            padding: 12px 15px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            width: 100%;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            width: auto;
+            padding: 6px 12px;
+            font-size: 0.9rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.95rem;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        th {
+            background: #f8f9fa;
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .badge-new {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .badge-update {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .text-muted {
+            color: #7f8c8d;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="./index.html">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家</a>
+        <a href="./query.html">查詢</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div id="msgAlert" class="alert"></div>
+
+        <div class="card">
+            <h3>
+                🌟 新增 / 編輯成就
+                <span id="formStatusBadge" class="badge badge-new">新增模式</span>
+            </h3>
+
+            <form id="achievementForm" onsubmit="submitAchievement(event)">
+                <!-- 隱藏的 ID 欄位 -->
+                <input type="hidden" id="ach_id" value="">
+
+                <div class="form-group">
+                    <label>📅 達成日期</label>
+                    <input type="date" id="ach_date" required>
+                </div>
+
+                <div class="form-group">
+                    <label>🏆 成就名稱 (必填)</label>
+                    <input type="text" id="ach_name" required placeholder="例如：自摸天胡、單場最高分...">
+                </div>
+
+                <div class="form-group">
+                    <label>👤 達成玩家 (必填)</label>
+                    <select id="ach_player" required>
+                        <option value="">-- 請選擇玩家 --</option>
+                        <optgroup id="active-players-group" label="啟用的玩家"></optgroup>
+                        <optgroup id="inactive-players-group" label="停用的玩家"></optgroup>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>🔗 關聯場次 (選填)</label>
+                    <select id="ach_session">
+                        <option value="0">-- 無關聯場次 --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>📝 備註事項 (選填)</label>
+                    <input type="text" id="ach_note" placeholder="例如：手牌很旺...">
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn">🚀 儲存成就</button>
+                <button type="button" id="cancelEditBtn" class="btn btn-warning"
+                    style="display: none; margin-top: 10px;" onclick="resetForm()">取消編輯</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>📜 歷史成就列表</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>成就名稱</th>
+                        <th>玩家</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="achievementsTableBody">
+                    <tr>
+                        <td colspan="4" style="text-align:center;">載入中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+
+        // 全域變數存放對應的列表資料，方便編輯時查找
+        let playersData = [];
+        let sessionsData = [];
+
+        function escapeHTML(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function showMessage(msg, isSuccess = false) {
+            const alertEl = document.getElementById('msgAlert');
+            alertEl.textContent = msg;
+            alertEl.className = isSuccess ? 'alert alert-success' : 'alert alert-danger';
+            alertEl.style.display = 'block';
+
+            clearTimeout(errorTimeout);
+            errorTimeout = setTimeout(() => {
+                alertEl.style.display = 'none';
+            }, 5000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            document.getElementById('ach_id').value = '';
+            document.getElementById('ach_date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('ach_name').value = '';
+            document.getElementById('ach_player').value = '';
+            document.getElementById('ach_session').value = '0';
+            document.getElementById('ach_note').value = '';
+
+            document.getElementById('formStatusBadge').className = 'badge badge-new';
+            document.getElementById('formStatusBadge').textContent = '新增模式';
+
+            const btn = document.getElementById('submitBtn');
+            btn.textContent = '🚀 新增成就';
+            btn.className = 'btn';
+
+            document.getElementById('cancelEditBtn').style.display = 'none';
+        }
+
+        async function loadData() {
+            try {
+                const { data: players, error: pErr } = await window.sb.from('players').select('*');
+                if (pErr) throw pErr;
+
+                const { data: sessions, error: sErr } = await window.sb.from('sessions').select('*').order('date', { ascending: false });
+                if (sErr) throw sErr;
+
+                const { data: achievements, error: aErr } = await window.sb.from('achievements').select('*, players(name), sessions(date)');
+                if (aErr) throw aErr;
+
+                playersData = players;
+                sessionsData = sessions;
+
+                // 渲染玩家下拉
+                const activeGroup = document.getElementById('active-players-group');
+                const inactiveGroup = document.getElementById('inactive-players-group');
+                activeGroup.innerHTML = '';
+                inactiveGroup.innerHTML = '';
+
+                playersData.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = escapeHTML(p.name);
+                    if (p.active) activeGroup.appendChild(opt);
+                    else inactiveGroup.appendChild(opt);
+                });
+
+                // 渲染場次下拉
+                const sessionSelect = document.getElementById('ach_session');
+                // 保留第一個選項
+                sessionSelect.innerHTML = '<option value="0">-- 無關聯場次 --</option>';
+                sessionsData.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.date;
+                    sessionSelect.appendChild(opt);
+                });
+
+                // 渲染成就表格 (Format to match existing render logic)
+                const formattedAchievements = achievements.map(a => ({
+                    id: a.id,
+                    date: a.date,
+                    name: a.name,
+                    note: a.note,
+                    player_id: a.player_id,
+                    player_name: a.players ? a.players.name : '未知',
+                    session_id: a.session_id,
+                    session_date: a.sessions ? a.sessions.date : null
+                }));
+                renderTable(formattedAchievements);
+
+                // 預設日期
+                if (!document.getElementById('ach_id').value) {
+                    document.getElementById('ach_date').value = new Date().toISOString().split('T')[0];
+                }
+
+            } catch (e) {
+                console.error(e);
+                showMessage("網路錯誤 或 載入失敗");
+            }
+        }
+
+        function renderTable(achievements) {
+            const tbody = document.getElementById('achievementsTableBody');
+            tbody.innerHTML = '';
+
+            if (achievements.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888;">目前沒有成就紀錄。</td></tr>';
+                return;
+            }
+
+            achievements.forEach(a => {
+                const tr = document.createElement('tr');
+
+                let html = `
+                <td>${a.date}</td>
+                <td>
+                    <strong>${escapeHTML(a.name)}</strong>
+            `;
+                if (a.note) {
+                    html += `<br><span class="text-muted">${escapeHTML(a.note)}</span>`;
+                }
+                if (a.session_id) {
+                    html += ` <a href="query.html?tab=session&date=${a.date}" style="font-size:0.8em; color:#3498db; text-decoration:none;">[查看場次]</a>`;
+                }
+
+                html += `
+                </td>
+                <td>${escapeHTML(a.player_name)}</td>
+                <td>
+                    <button class="btn btn-warning btn-danger" style="background:#f39c12; margin-right:5px;" data-id="${a.id}" data-action="edit">編輯</button>
+                    <button class="btn btn-danger" data-id="${a.id}" data-action="delete">刪除</button>
+                </td>
+            `;
+
+                tr.innerHTML = html;
+
+                // 綁定編輯與刪除事件
+                const editBtn = tr.querySelector('[data-action="edit"]');
+                editBtn.addEventListener('click', () => editAchievement(a));
+
+                const delBtn = tr.querySelector('[data-action="delete"]');
+                delBtn.addEventListener('click', () => deleteAchievement(a.id, a.name));
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        function editAchievement(a) {
+            document.getElementById('ach_id').value = a.id;
+            document.getElementById('ach_date').value = a.date;
+            document.getElementById('ach_name').value = a.name;
+            document.getElementById('ach_player').value = a.player_id;
+            document.getElementById('ach_session').value = a.session_id || '0';
+            document.getElementById('ach_note').value = a.note || "";
+
+            document.getElementById('formStatusBadge').className = 'badge badge-update';
+            document.getElementById('formStatusBadge').textContent = '編輯模式';
+
+            const btn = document.getElementById('submitBtn');
+            btn.textContent = '🔄 更新成就';
+            btn.className = 'btn btn-warning';
+
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function submitAchievement(e) {
+            e.preventDefault();
+
+            const payload = {
+                date: document.getElementById('ach_date').value,
+                name: document.getElementById('ach_name').value,
+                player_id: parseInt(document.getElementById('ach_player').value),
+                session_id: parseInt(document.getElementById('ach_session').value) || null,
+                note: document.getElementById('ach_note').value || null
+            };
+            const editId = document.getElementById('ach_id').value;
+
+            try {
+                let error;
+                if (editId) {
+                    const { error: updErr } = await window.sb.from('achievements').update(payload).eq('id', editId);
+                    error = updErr;
+                } else {
+                    const { error: insErr } = await window.sb.from('achievements').insert([payload]);
+                    error = insErr;
+                }
+
+                if (!error) {
+                    showMessage(`成就${editId ? '更新' : '新增'}成功！`, true);
+                    resetForm();
+                    loadData();
+                } else {
+                    showMessage(error.message || "儲存失敗");
+                }
+            } catch (e) { showMessage("網路連線失敗"); }
+        }
+
+        async function deleteAchievement(id, name) {
+            if (!confirm(`確定要刪除成就「${name}」嗎？`)) return;
+
+            try {
+                const { error } = await window.sb.from('achievements').delete().eq('id', id);
+
+                if (!error) {
+                    showMessage("成就已刪除", true);
+                    loadData();
+                } else {
+                    showMessage(error.message || "刪除失敗");
+                }
+            } catch (e) { showMessage("網路連線失敗"); }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+
+</body>
+
+</html>

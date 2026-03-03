@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料匯出 - API 版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 30px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.5rem;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 25px;
+            margin: 10px;
+            border-radius: 4px;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            box-shadow: 0 4px 0 #2980b9;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+            box-shadow: 0 4px 0 #2196f3;
+        }
+
+        .info-box {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            text-align: left;
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: #555;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="./index.html">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家</a>
+        <a href="./query.html">查詢</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h3>📊 戰績資料匯出</h3>
+            <p>您可以將戰績資料匯出為 CSV 格式，包含歷史所有場次，方便使用 Excel 等軟體進行進階分析或備份。</p>
+
+            <div>
+                <button onclick="downloadCSV('month')" class="btn btn-primary" style="cursor: pointer; border: none;">
+                    📥 下載本月 CSV
+                </button>
+
+                <button onclick="downloadCSV('all')" class="btn btn-success" style="cursor: pointer; border: none;">
+                    📥 下載全部 CSV
+                </button>
+            </div>
+
+            <div class="info-box">
+                <strong>匯出說明：</strong>
+                <ul style="margin-top: 5px; padding-left: 20px;">
+                    <li>檔案為 <code>UTF-8 with BOM</code> 格式，Excel 開啟不會亂碼。</li>
+                    <li>直欄為玩家名稱，橫列為日期，內容為該場輸贏分數。</li>
+                    <li>建議定期下載以備份重要戰績紀錄。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function downloadCSV(rangeType) {
+            try {
+                const { data: ledgers, error } = await window.sb.from('ledgers').select('delta, players(name, type), sessions(date)').order('sessions(date)', { ascending: false });
+                if (error) throw error;
+
+                if (!ledgers || ledgers.length === 0) {
+                    alert("目前無戰績資料可匯出！");
+                    return;
+                }
+
+                const today = new Date();
+                const currentMonth = today.toISOString().slice(0, 7);
+
+                // 1. 整理唯一玩家與過濾日期
+                const playerNames = new Set();
+                const sessionDataMap = {}; // date -> { playerName: delta }
+
+                ledgers.forEach(l => {
+                    const dateStr = l.sessions.date;
+                    if (rangeType === 'month' && !dateStr.startsWith(currentMonth)) return;
+
+                    const pName = `${l.players.name}(${l.players.type === 'fixed' ? '固定' : '訪客'})`;
+                    playerNames.add(pName);
+
+                    if (!sessionDataMap[dateStr]) {
+                        sessionDataMap[dateStr] = {};
+                    }
+                    if (!sessionDataMap[dateStr][pName]) {
+                        sessionDataMap[dateStr][pName] = 0;
+                    }
+                    sessionDataMap[dateStr][pName] += l.delta;
+                });
+
+                const sortedDates = Object.keys(sessionDataMap).sort((a, b) => b.localeCompare(a));
+                const sortedPlayers = Array.from(playerNames).sort();
+
+                if (sortedDates.length === 0) {
+                    alert("該區間無戰績資料可匯出！");
+                    return;
+                }
+
+                // 2. 組合 CSV
+                let csvContent = '\uFEFF'; // BOM
+
+                // Header
+                csvContent += '日期,' + sortedPlayers.join(',') + '\n';
+
+                // Rows
+                sortedDates.forEach(date => {
+                    const row = [date];
+                    sortedPlayers.forEach(pName => {
+                        const score = sessionDataMap[date][pName] || 0;
+                        row.push(score);
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+
+                // 3. 觸發下載
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `mahjong_records_${rangeType}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+            } catch (e) {
+                console.error("匯出失敗:", e);
+                alert("匯出失敗：" + e.message);
+            }
+        }
+    </script>
+</body>
+
+</html>

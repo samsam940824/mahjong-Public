@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>玩家管理 - API 版</title>
+    <style>
+        /* 直接複製來自 style.css / base.html 最基本的樣式 */
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+        }
+
+        .btn-success {
+            background: #27ae60;
+        }
+
+        .btn-dark {
+            background: #333;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        th {
+            cursor: pointer;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="/">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家設定</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div id="error-alert" class="card"
+            style="display:none; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;"></div>
+
+        <div class="card">
+            <h3>新增玩家</h3>
+            <form id="createForm" onsubmit="createPlayer(event)">
+                <div class="form-group">
+                    <label>名稱</label>
+                    <input type="text" id="createName" placeholder="輸入名字 (例如: 三叔公)" required>
+                </div>
+                <div class="form-group">
+                    <label>類型</label>
+                    <select id="createType">
+                        <option value="fixed">固定玩家 (家人)</option>
+                        <option value="guest">訪客 (偶爾來)</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-block">新增</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>玩家列表</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>名稱</th>
+                        <th>類型</th>
+                        <th style="text-align: right;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="playersTableBody">
+                    <!-- Data will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h3>編輯玩家</h3>
+            <form id="editForm" onsubmit="updatePlayer(event)">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>名稱</label>
+                    <input type="text" id="editName" required>
+                </div>
+                <div class="form-group">
+                    <label>類型</label>
+                    <select id="editType">
+                        <option value="fixed">固定玩家 (家人)</option>
+                        <option value="guest">訪客 (偶爾來)</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button type="submit" class="btn btn-block">儲存</button>
+                    <button type="button" class="btn btn-secondary btn-block" onclick="closeEditModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showError(msg) {
+            const alertEl = document.getElementById('error-alert');
+            alertEl.textContent = msg;
+            alertEl.style.display = 'block';
+            setTimeout(() => alertEl.style.display = 'none', 5000);
+        }
+
+        async function loadPlayers() {
+            try {
+                const { data: players, error } = await window.sb.from('players').select('*').order('name');
+                if (error) throw error;
+
+                const tbody = document.getElementById('playersTableBody');
+                tbody.innerHTML = "";
+
+                players.forEach(player => {
+                    const tr = document.createElement('tr');
+
+                    const tdName = document.createElement('td');
+                    tdName.textContent = player.name;
+
+                    const tdType = document.createElement('td');
+                    if (player.type === 'fixed') {
+                        tdType.innerHTML = '<span style="color: #2980b9;">固定</span>';
+                    } else {
+                        tdType.innerHTML = '<span style="color: #e67e22;">訪客</span>';
+                    }
+
+                    const tdActions = document.createElement('td');
+                    tdActions.style.textAlign = 'right';
+                    tdActions.style.whiteSpace = 'nowrap';
+
+                    // Edit
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'btn btn-secondary';
+                    editBtn.style.padding = '5px 10px';
+                    editBtn.style.fontSize = '0.8rem';
+                    editBtn.style.marginRight = '5px';
+                    editBtn.textContent = '編輯';
+                    editBtn.onclick = () => openEditModal(player.id, player.name, player.type);
+
+                    // Toggle
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.style.padding = '5px 10px';
+                    toggleBtn.style.fontSize = '0.8rem';
+                    toggleBtn.style.marginRight = '5px';
+                    if (player.active) {
+                        toggleBtn.className = 'btn btn-danger';
+                        toggleBtn.textContent = '停用';
+                    } else {
+                        toggleBtn.className = 'btn btn-success';
+                        toggleBtn.textContent = '啟用';
+                    }
+                    toggleBtn.onclick = () => togglePlayer(player.id, !player.active);
+
+                    // Delete
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-dark';
+                    delBtn.style.padding = '5px 10px';
+                    delBtn.style.fontSize = '0.8rem';
+                    delBtn.textContent = '🗑️';
+                    delBtn.onclick = () => {
+                        if (confirm('確定要刪除嗎？若有戰績將無法刪除。')) {
+                            deletePlayer(player.id);
+                        }
+                    };
+
+                    tdActions.appendChild(editBtn);
+                    tdActions.appendChild(toggleBtn);
+                    tdActions.appendChild(delBtn);
+
+                    tr.appendChild(tdName);
+                    tr.appendChild(tdType);
+                    tr.appendChild(tdActions);
+
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                showError("載入失敗: " + e.message);
+            }
+        }
+
+        async function createPlayer(e) {
+            e.preventDefault();
+            const name = document.getElementById('createName').value;
+            const type = document.getElementById('createType').value;
+
+            try {
+                const { error } = await window.sb.from('players').insert([{ name: name, type: type, active: true }]);
+                if (error) {
+                    if (error.code === '23505') {
+                        showError("新增失敗: 玩家名稱已存在");
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    document.getElementById('createForm').reset();
+                    loadPlayers();
+                }
+            } catch (e) {
+                console.error(e);
+                showError("新增失敗: " + e.message);
+            }
+        }
+
+        function openEditModal(id, name, type) {
+            document.getElementById('editId').value = id;
+            document.getElementById('editName').value = name;
+            document.getElementById('editType').value = type;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        async function updatePlayer(e) {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const name = document.getElementById('editName').value;
+            const type = document.getElementById('editType').value;
+
+            try {
+                const { error } = await window.sb.from('players').update({ name, type }).eq('id', id);
+                if (error) {
+                    if (error.code === '23505') {
+                        showError("更新失敗: 玩家名稱已存在");
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    closeEditModal();
+                    loadPlayers();
+                }
+            } catch (e) {
+                console.error(e);
+                showError("更新失敗: " + e.message);
+            }
+        }
+
+        async function togglePlayer(id, targetActive) {
+            try {
+                const { error } = await window.sb.from('players').update({ active: targetActive }).eq('id', id);
+                if (error) throw error;
+                loadPlayers();
+            } catch (e) {
+                console.error(e);
+                showError("切換失敗: " + e.message);
+            }
+        }
+
+        async function deletePlayer(id) {
+            try {
+                const { error } = await window.sb.from('players').delete().eq('id', id);
+                if (error) {
+                    if (error.code === '23503') { // Foreign key violation
+                        showError("無法刪除：該玩家已有戰績或成就");
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    loadPlayers();
+                }
+            } catch (e) {
+                console.error(e);
+                showError("刪除失敗: " + e.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadPlayers);
+    </script>
+
+</body>
+
+</html>

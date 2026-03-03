@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>統計查詢 - API 版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            background: #34495e;
+            padding: 10px 20px;
+        }
+
+        .nav-links a {
+            color: #ecf0f1;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .tab-nav {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            color: #666;
+            font-weight: bold;
+        }
+
+        .tab-btn.active {
+            color: #3498db;
+            border-bottom: 3px solid #3498db;
+            margin-bottom: -2px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .score-positive {
+            color: green;
+            font-weight: bold;
+        }
+
+        .score-negative {
+            color: red;
+            font-weight: bold;
+        }
+
+        .score-neutral {
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Supabase CDN and Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="/">🀄 麻將戰績紀錄 (前端靜態化)</a>
+    </header>
+    <div class="nav-links">
+        <a href="./index.html">首頁</a>
+        <a href="./session_new.html">記一場</a>
+        <a href="./players.html">玩家</a>
+        <a href="./query.html">查詢</a>
+        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <div class="tab-nav">
+                <div class="tab-btn active" onclick="switchTab('tab-stats')">戰績統計</div>
+                <div class="tab-btn" onclick="switchTab('tab-player')">玩家明細</div>
+                <div class="tab-btn" onclick="switchTab('tab-session')">場次明細</div>
+            </div>
+
+            <!-- 戰績統計 Tab -->
+            <div id="tab-stats" class="tab-content active">
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <select id="rangeSelect" onchange="loadLeaderboard()" style="flex: 1; height: 40px;">
+                        <option value="month">本月</option>
+                        <option value="year">今年</option>
+                        <option value="all">全部</option>
+                    </select>
+
+                    <label
+                        style="display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; padding: 5px; background: #fff; border-radius: 4px; border: 1px solid #ddd; height: 40px; box-sizing: border-box;">
+                        <input type="checkbox" id="guestCheck" onchange="loadLeaderboard()"
+                            style="width: 20px; height: 20px; margin: 0;" checked>
+                        <span style="font-size: 1rem; line-height: 1;">含訪客</span>
+                    </label>
+                </div>
+
+                <table id="leaderboardTable">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th>玩家</th>
+                            <th style="text-align: right;">總輸贏</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardTbody">
+                    </tbody>
+                </table>
+                <p id="guestNote" style="font-size: 0.8rem; color: #666; margin-top: 10px; display: none;">* 已排除訪客。</p>
+            </div>
+
+            <!-- 玩家明細 Tab -->
+            <div id="tab-player" class="tab-content">
+                <div class="form-group">
+                    <select id="player-select" onchange="loadPlayerHistory()">
+                        <option value="">-- 請選擇玩家 --</option>
+                    </select>
+                </div>
+                <div id="player-history-result"></div>
+            </div>
+
+            <!-- 場次明細 Tab -->
+            <div id="tab-session" class="tab-content">
+                <div class="form-group">
+                    <input type="date" id="session-date-picker" onchange="loadSessionDetail()">
+                </div>
+                <div id="session-detail-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        function escapeHTML(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(tabId).classList.add('active');
+
+            const buttons = document.querySelectorAll('.tab-btn');
+            if (tabId === 'tab-stats') buttons[0].classList.add('active');
+            if (tabId === 'tab-player') buttons[1].classList.add('active');
+            if (tabId === 'tab-session') buttons[2].classList.add('active');
+        }
+
+        function calculateRanking(ledgers, range, includeGuests) {
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7); // YYYY-MM
+            const currentYear = today.toISOString().slice(0, 4); // YYYY
+
+            const scores = {};
+            ledgers.forEach(l => {
+                const p = l.players;
+                if (!p) return;
+
+                if (!includeGuests && p.type === 'guest') return;
+
+                const dateStr = l.sessions.date;
+                if (range === 'month' && !dateStr.startsWith(currentMonth)) return;
+                if (range === 'year' && !dateStr.startsWith(currentYear)) return;
+
+                if (!scores[p.id]) {
+                    scores[p.id] = { name: p.name, type: p.type, total_score: 0 };
+                }
+                scores[p.id].total_score += l.delta;
+            });
+            return Object.values(scores).sort((a, b) => b.total_score - a.total_score);
+        }
+
+        // 戰績統計邏輯
+        async function loadLeaderboard() {
+            const range = document.getElementById('rangeSelect').value;
+            const includeGuests = document.getElementById('guestCheck').checked;
+
+            document.getElementById('guestNote').style.display = includeGuests ? 'none' : 'block';
+
+            try {
+                const { data: ledgers, error } = await window.sb.from('ledgers').select('delta, players(id, name, type), sessions(date)');
+                if (error) throw error;
+
+                const rankedData = calculateRanking(ledgers, range, includeGuests);
+
+                const tbody = document.getElementById('leaderboardTbody');
+                tbody.innerHTML = '';
+
+                if (rankedData && rankedData.length > 0) {
+                    rankedData.forEach(stat => {
+                        const tr = document.createElement('tr');
+
+                        const tdPlayer = document.createElement('td');
+                        tdPlayer.innerHTML = `${escapeHTML(stat.name)} ${stat.type === 'guest' ? '<span style="font-size:0.8em; color:#999;">(客)</span>' : ''}`;
+
+                        const tdScore = document.createElement('td');
+                        tdScore.style.textAlign = 'right';
+                        tdScore.textContent = stat.total_score;
+                        tdScore.className = stat.total_score > 0 ? 'score-positive' : (stat.total_score < 0 ? 'score-negative' : 'score-neutral');
+
+                        tr.appendChild(tdPlayer);
+                        tr.appendChild(tdScore);
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">無資料</td></tr>';
+                }
+            } catch (e) {
+                console.error("載入排行榜失敗:", e);
+            }
+        }
+
+        // 玩家明細邏輯
+        async function loadPlayerOptions() {
+            try {
+                const { data: players, error } = await window.sb.from('players').select('*').order('name');
+                if (error) throw error;
+                const select = document.getElementById('player-select');
+                players.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = `${p.name} (${p.type === 'fixed' ? '固定' : '訪客'})`;
+                    select.appendChild(opt);
+                });
+            } catch (e) { console.error("無法載入玩家下拉選單", e); }
+        }
+
+        async function loadPlayerHistory() {
+            const pid = document.getElementById('player-select').value;
+            const resultDiv = document.getElementById('player-history-result');
+            if (!pid) { resultDiv.innerHTML = ""; return; }
+
+            resultDiv.innerHTML = "<p>載入中...</p>";
+            try {
+                const { data: history, error } = await window.sb.from('ledgers').select('delta, sessions(date, note)').eq('player_id', pid);
+                if (error) throw error;
+
+                if (!history || history.length === 0) {
+                    resultDiv.innerHTML = "<p style='text-align:center;'>尚無紀錄</p>";
+                    return;
+                }
+
+                history.sort((a, b) => b.sessions.date.localeCompare(a.sessions.date));
+
+                let html = `
+                <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead><tr style="background:#eee;"><th style="padding:8px; text-align:left;">日期</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
+                    <tbody>
+            `;
+                history.forEach(row => {
+                    const color = row.delta > 0 ? 'green' : (row.delta < 0 ? 'red' : '#aaa');
+                    html += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px;">${row.sessions.date}<br><small style="color:#888;">${escapeHTML(row.sessions.note)}</small></td>
+                        <td style="padding:8px; text-align:right; color:${color}; font-weight:bold;">${row.delta}</td>
+                    </tr>
+                `;
+                });
+                html += "</tbody></table>";
+                resultDiv.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+                resultDiv.innerHTML = "載入失敗";
+            }
+        }
+
+        // 場次明細邏輯
+        async function loadSessionDetail() {
+            const dateVal = document.getElementById('session-date-picker').value;
+            const resultDiv = document.getElementById('session-detail-result');
+            if (!dateVal) return;
+
+            resultDiv.innerHTML = "<p>載入中...</p>";
+            try {
+                const { data: session, error } = await window.sb.from('sessions').select('id, date, note, ledgers(delta, players(name, type))').eq('date', dateVal).maybeSingle();
+                if (error) throw error;
+
+                if (!session) {
+                    resultDiv.innerHTML = "<p style='text-align:center; padding: 20px;'>該日無戰績紀錄</p>";
+                    return;
+                }
+
+                let html = `
+                <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead><tr style="background:#eee;"><th style="padding:8px; text-align:left;">玩家</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
+                    <tbody>
+            `;
+                session.ledgers.forEach(row => {
+                    const color = row.delta > 0 ? 'green' : (row.delta < 0 ? 'red' : '#aaa');
+                    const type_str = row.players.type === 'fixed' ? '固定' : '訪客';
+                    html += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px;">${escapeHTML(row.players.name)} <small style="color:#888;">(${type_str})</small></td>
+                        <td style="padding:8px; text-align:right; color:${color}; font-weight:bold;">${row.delta}</td>
+                    </tr>
+                `;
+                });
+                html += "</tbody></table>";
+
+                // 這裡放置表單刪除，從記一場移至此處
+                html += `
+                <div style="text-align: right; border-top: 2px solid #eee; padding-top: 15px;">
+                    <a href="session_new.html?date=${dateVal}" style="color: #3498db; text-decoration: none; margin-right: 15px;">✏️ 編輯此場紀錄</a>
+                    <button class="btn btn-danger" onclick="deleteSession(${session.id})" style="background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">🗑️ 刪除此場紀錄</button>
+                </div>
+            `;
+
+                resultDiv.innerHTML = html;
+            } catch (e) {
+                resultDiv.innerHTML = "載入失敗";
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (!confirm('確定要刪除這場戰績嗎？')) return;
+            try {
+                const { error } = await window.sb.from('sessions').delete().eq('id', sessionId);
+                if (error) throw error;
+                alert('刪除成功');
+                document.getElementById('session-detail-result').innerHTML = '';
+                // 若要自動重新載入或提示可以加這裡
+            } catch (e) {
+                console.error(e);
+                alert("刪除失敗");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 設定今日日期
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('session-date-picker').value = today;
+
+            loadLeaderboard();
+            loadPlayerOptions();
+
+            // 處理 URL 參數連動
+            const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get('tab');
+            const dateParam = params.get('date');
+
+            if (tabParam) {
+                if (tabParam === 'session') {
+                    switchTab('tab-session');
+                    if (dateParam) {
+                        document.getElementById('session-date-picker').value = dateParam;
+                    }
+                    loadSessionDetail();
+                } else if (tabParam === 'player') {
+                    switchTab('tab-player');
+                } else {
+                    switchTab('tab-stats');
+                }
+            }
+        });
+
+    </script>
+</body>
+
+</html>
