@@ -4,179 +4,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>統計查詢 - API 版</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 0;
-        }
-
-        header {
-            background: #2c3e50;
-            color: white;
-            padding: 15px 20px;
-            font-size: 1.2rem;
-        }
-
-        header a {
-            color: white;
-            text-decoration: none;
-        }
-
-        .nav-links {
-            background: #34495e;
-            padding: 10px 20px;
-        }
-
-        .nav-links a {
-            color: #ecf0f1;
-            text-decoration: none;
-            margin-right: 15px;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 0 15px;
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .tab-nav {
-            display: flex;
-            border-bottom: 2px solid #eee;
-            margin-bottom: 20px;
-        }
-
-        .tab-btn {
-            padding: 10px 20px;
-            cursor: pointer;
-            color: #666;
-            font-weight: bold;
-        }
-
-        .tab-btn.active {
-            color: #3498db;
-            border-bottom: 3px solid #3498db;
-            margin-bottom: -2px;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group select,
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            font-size: 1rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th,
-        td {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            text-align: left;
-        }
-
-        .score-positive {
-            color: green;
-            font-weight: bold;
-        }
-
-        .score-negative {
-            color: red;
-            font-weight: bold;
-        }
-
-        .score-neutral {
-            color: #aaa;
-        }
-    </style>
+    <title>統計查詢 - 麻將戰績</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 
 <body>
-    <!-- Supabase CDN and Config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="config.js"></script>
+    <script src="utils.js"></script>
     <script src="auth.js"></script>
 
     <header>
         <a href="./index.html">🀄 麻將戰績紀錄</a>
     </header>
-    <div class="nav-links">
-        <a href="./index.html">首頁</a>
-        <a href="./session_new.html">記一場</a>
-        <a href="./players.html">玩家</a>
-        <a href="./query.html">查詢</a>
-        <a href="./achievements.html">成就</a>
-        <a href="./export.html">匯出</a>
-        <a href="#" onclick="logout(); return false;" style="color: #e74c3c; font-weight: bold;">登出</a>
-    </div>
+    <nav class="nav-links">
+        <a href="./index.html"        data-page="index.html">首頁</a>
+        <a href="./session_new.html"  data-page="session_new.html">記一場</a>
+        <a href="./players.html"      data-page="players.html">玩家</a>
+        <a href="./query.html"        data-page="query.html">查詢</a>
+        <a href="./achievements.html" data-page="achievements.html">成就</a>
+        <a href="./export.html"       data-page="export.html">匯出</a>
+        <a href="#" class="nav-logout" onclick="logout(); return false;">登出</a>
+    </nav>
 
     <div class="container">
+        <div id="msgAlert" class="alert"></div>
+
         <div class="card">
             <div class="tab-nav">
-                <div class="tab-btn active" onclick="switchTab('tab-stats')">戰績統計</div>
-                <div class="tab-btn" onclick="switchTab('tab-player')">玩家明細</div>
-                <div class="tab-btn" onclick="switchTab('tab-session')">場次明細</div>
+                <div class="tab-btn active" data-tab="tab-stats">戰績統計</div>
+                <div class="tab-btn"        data-tab="tab-player">玩家明細</div>
+                <div class="tab-btn"        data-tab="tab-session">場次明細</div>
             </div>
 
-            <!-- 戰績統計 Tab -->
+            <!-- 戰績統計 -->
             <div id="tab-stats" class="tab-content active">
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <select id="rangeSelect" onchange="loadLeaderboard()" style="flex: 1; height: 40px;">
+                <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px;">
+                    <select id="rangeSelect" onchange="loadLeaderboard()" style="flex:1; height:40px;">
                         <option value="month">本月</option>
                         <option value="year">今年</option>
                         <option value="all">全部</option>
                     </select>
-
-                    <label
-                        style="display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; padding: 5px; background: #fff; border-radius: 4px; border: 1px solid #ddd; height: 40px; box-sizing: border-box;">
-                        <input type="checkbox" id="guestCheck" onchange="loadLeaderboard()"
-                            style="width: 20px; height: 20px; margin: 0;" checked>
-                        <span style="font-size: 1rem; line-height: 1;">含訪客</span>
+                    <label style="display:flex; align-items:center; gap:6px; white-space:nowrap; cursor:pointer; padding:5px; background:#fff; border-radius:4px; border:1px solid #ddd; height:40px; box-sizing:border-box;">
+                        <input type="checkbox" id="guestCheck" onchange="loadLeaderboard()" style="width:20px; height:20px; margin:0;" checked>
+                        <span style="font-size:1rem; line-height:1;">含訪客</span>
                     </label>
                 </div>
-
                 <table id="leaderboardTable">
-                    <thead>
-                        <tr style="background: #f8f9fa;">
-                            <th>玩家</th>
-                            <th style="text-align: right;">總輸贏</th>
-                        </tr>
-                    </thead>
-                    <tbody id="leaderboardTbody">
-                    </tbody>
+                    <thead><tr style="background:#f8f9fa;"><th>玩家</th><th class="text-right">總輸贏</th></tr></thead>
+                    <tbody id="leaderboardTbody"></tbody>
                 </table>
-                <p id="guestNote" style="font-size: 0.8rem; color: #666; margin-top: 10px; display: none;">* 已排除訪客。</p>
+                <p id="guestNote" style="font-size:0.8rem; color:#666; margin-top:10px; display:none;">* 已排除訪客。</p>
             </div>
 
-            <!-- 玩家明細 Tab -->
+            <!-- 玩家明細 -->
             <div id="tab-player" class="tab-content">
                 <div class="form-group">
                     <select id="player-select" onchange="loadPlayerHistory()">
@@ -186,10 +69,13 @@
                 <div id="player-history-result"></div>
             </div>
 
-            <!-- 場次明細 Tab -->
+            <!-- 場次明細 -->
             <div id="tab-session" class="tab-content">
                 <div class="form-group">
-                    <input type="date" id="session-date-picker" onchange="loadSessionDetail()">
+                    <label style="font-size:0.85rem; color:#666; margin-bottom:6px; display:block;">
+                        📅 選擇日期（有場次的日期下方有藍點）
+                    </label>
+                    <input type="text" id="session-date-picker" placeholder="選擇日期..." readonly>
                 </div>
                 <div id="session-detail-result"></div>
             </div>
@@ -197,94 +83,79 @@
     </div>
 
     <script>
-
-        function escapeHTML(str) {
-            if (!str) return "";
-            return String(str)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
+        // ── Tab switching ─────────────────────────────────────────────
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchTab(btn.dataset.tab);
+                if (btn.dataset.tab === 'tab-session') {
+                    const result = document.getElementById('session-detail-result');
+                    if (!result.innerHTML.trim()) loadSessionDetail();
+                }
+            });
+        });
 
         function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
             document.getElementById(tabId).classList.add('active');
-
-            const buttons = document.querySelectorAll('.tab-btn');
-            if (tabId === 'tab-stats') buttons[0].classList.add('active');
-            if (tabId === 'tab-player') buttons[1].classList.add('active');
-            if (tabId === 'tab-session') buttons[2].classList.add('active');
         }
 
+        // ── 戰績統計 ──────────────────────────────────────────────────
         function calculateRanking(ledgers, range, includeGuests) {
-            const today = new Date();
-            const currentMonth = today.toISOString().slice(0, 7); // YYYY-MM
-            const currentYear = today.toISOString().slice(0, 4); // YYYY
+            const today        = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+            const currentYear  = today.toISOString().slice(0, 4);
 
             const scores = {};
             ledgers.forEach(l => {
                 const p = l.players;
                 if (!p) return;
-
                 if (!includeGuests && p.type === 'guest') return;
-
                 const dateStr = l.sessions.date;
                 if (range === 'month' && !dateStr.startsWith(currentMonth)) return;
-                if (range === 'year' && !dateStr.startsWith(currentYear)) return;
-
-                if (!scores[p.id]) {
-                    scores[p.id] = { name: p.name, type: p.type, total_score: 0 };
-                }
+                if (range === 'year'  && !dateStr.startsWith(currentYear))  return;
+                if (!scores[p.id]) scores[p.id] = { name: p.name, type: p.type, total_score: 0 };
                 scores[p.id].total_score += l.delta;
             });
             return Object.values(scores).sort((a, b) => b.total_score - a.total_score);
         }
 
-        // 戰績統計邏輯
         async function loadLeaderboard() {
-            const range = document.getElementById('rangeSelect').value;
+            const range         = document.getElementById('rangeSelect').value;
             const includeGuests = document.getElementById('guestCheck').checked;
-
             document.getElementById('guestNote').style.display = includeGuests ? 'none' : 'block';
 
             try {
-                const { data: ledgers, error } = await window.sb.from('ledgers').select('delta, players(id, name, type), sessions(date)');
+                const { data: ledgers, error } = await window.sb
+                    .from('ledgers').select('delta, players(id, name, type), sessions(date)');
                 if (error) throw error;
 
                 const rankedData = calculateRanking(ledgers, range, includeGuests);
-
                 const tbody = document.getElementById('leaderboardTbody');
                 tbody.innerHTML = '';
 
-                if (rankedData && rankedData.length > 0) {
-                    rankedData.forEach(stat => {
-                        const tr = document.createElement('tr');
-
-                        const tdPlayer = document.createElement('td');
-                        tdPlayer.innerHTML = `${escapeHTML(stat.name)} ${stat.type === 'guest' ? '<span style="font-size:0.8em; color:#999;">(客)</span>' : ''}`;
-
-                        const tdScore = document.createElement('td');
-                        tdScore.style.textAlign = 'right';
-                        tdScore.textContent = stat.total_score;
-                        tdScore.className = stat.total_score > 0 ? 'score-positive' : (stat.total_score < 0 ? 'score-negative' : 'score-neutral');
-
-                        tr.appendChild(tdPlayer);
-                        tr.appendChild(tdScore);
-                        tbody.appendChild(tr);
-                    });
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">無資料</td></tr>';
+                if (!rankedData || rankedData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center" style="padding:20px;">無資料</td></tr>';
+                    return;
                 }
+                rankedData.forEach(stat => {
+                    const tr = document.createElement('tr');
+                    const tdPlayer = document.createElement('td');
+                    tdPlayer.innerHTML = `${escapeHTML(stat.name)} ${stat.type === 'guest' ? '<span style="font-size:0.8em;color:#999;">(客)</span>' : ''}`;
+                    const tdScore = document.createElement('td');
+                    tdScore.className = 'text-right ' + (stat.total_score > 0 ? 'score-positive' : stat.total_score < 0 ? 'score-negative' : 'score-neutral');
+                    tdScore.textContent = stat.total_score;
+                    tr.append(tdPlayer, tdScore);
+                    tbody.appendChild(tr);
+                });
             } catch (e) {
                 console.error("載入排行榜失敗:", e);
+                showMessage("載入排行榜失敗：" + e.message);
             }
         }
 
-        // 玩家明細邏輯
+        // ── 玩家明細 ──────────────────────────────────────────────────
         async function loadPlayerOptions() {
             try {
                 const { data: players, error } = await window.sb.from('players').select('*').order('name');
@@ -302,86 +173,74 @@
         async function loadPlayerHistory() {
             const pid = document.getElementById('player-select').value;
             const resultDiv = document.getElementById('player-history-result');
-            if (!pid) { resultDiv.innerHTML = ""; return; }
+            if (!pid) { resultDiv.innerHTML = ''; return; }
 
-            resultDiv.innerHTML = "<p>載入中...</p>";
+            resultDiv.innerHTML = '<p>載入中...</p>';
             try {
-                const { data: history, error } = await window.sb.from('ledgers').select('delta, sessions(date, note)').eq('player_id', pid);
+                const { data: history, error } = await window.sb
+                    .from('ledgers').select('delta, sessions(date, note)').eq('player_id', pid);
                 if (error) throw error;
 
                 if (!history || history.length === 0) {
-                    resultDiv.innerHTML = "<p style='text-align:center;'>尚無紀錄</p>";
+                    resultDiv.innerHTML = "<p class='text-center'>尚無紀錄</p>";
                     return;
                 }
 
                 history.sort((a, b) => b.sessions.date.localeCompare(a.sessions.date));
-
-                let html = `
-                <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <thead><tr style="background:#eee;"><th style="padding:8px; text-align:left;">日期</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
-                    <tbody>
-            `;
+                let html = `<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                    <thead><tr style="background:#eee;"><th style="padding:8px;">日期</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
+                    <tbody>`;
                 history.forEach(row => {
-                    const color = row.delta > 0 ? 'green' : (row.delta < 0 ? 'red' : '#aaa');
-                    html += `
-                    <tr style="border-bottom:1px solid #eee;">
-                        <td style="padding:8px;">${row.sessions.date}<br><small style="color:#888;">${escapeHTML(row.sessions.note)}</small></td>
-                        <td style="padding:8px; text-align:right; color:${color}; font-weight:bold;">${row.delta}</td>
-                    </tr>
-                `;
+                    const cls = row.delta > 0 ? 'score-positive' : row.delta < 0 ? 'score-negative' : 'score-neutral';
+                    html += `<tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px;">${escapeHTML(row.sessions.date)}<br><small style="color:#888;">${escapeHTML(row.sessions.note)}</small></td>
+                        <td style="padding:8px; text-align:right;" class="${cls}">${row.delta}</td>
+                    </tr>`;
                 });
-                html += "</tbody></table>";
+                html += '</tbody></table>';
                 resultDiv.innerHTML = html;
             } catch (e) {
                 console.error(e);
-                resultDiv.innerHTML = "載入失敗";
+                resultDiv.innerHTML = '<p style="color:red;">載入失敗</p>';
             }
         }
 
-        // 場次明細邏輯
+        // ── 場次明細 ──────────────────────────────────────────────────
         async function loadSessionDetail() {
-            const dateVal = document.getElementById('session-date-picker').value;
+            const dateVal   = getCalendarDate();
             const resultDiv = document.getElementById('session-detail-result');
             if (!dateVal) return;
 
-            resultDiv.innerHTML = "<p>載入中...</p>";
+            resultDiv.innerHTML = '<p>載入中...</p>';
             try {
-                const { data: session, error } = await window.sb.from('sessions').select('id, date, note, ledgers(delta, players(name, type))').eq('date', dateVal).maybeSingle();
+                const { data: session, error } = await window.sb
+                    .from('sessions').select('id, date, note, ledgers(delta, players(name, type))').eq('date', dateVal).maybeSingle();
                 if (error) throw error;
 
                 if (!session) {
-                    resultDiv.innerHTML = "<p style='text-align:center; padding: 20px;'>該日無戰績紀錄</p>";
+                    resultDiv.innerHTML = "<p class='text-center' style='padding:20px;'>該日無戰績紀錄</p>";
                     return;
                 }
 
-                let html = `
-                <table style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-                    <thead><tr style="background:#eee;"><th style="padding:8px; text-align:left;">玩家</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
-                    <tbody>
-            `;
+                let html = `<table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                    <thead><tr style="background:#eee;"><th style="padding:8px;">玩家</th><th style="padding:8px; text-align:right;">輸贏</th></tr></thead>
+                    <tbody>`;
                 session.ledgers.forEach(row => {
-                    const color = row.delta > 0 ? 'green' : (row.delta < 0 ? 'red' : '#aaa');
-                    const type_str = row.players.type === 'fixed' ? '固定' : '訪客';
-                    html += `
-                    <tr style="border-bottom:1px solid #eee;">
-                        <td style="padding:8px;">${escapeHTML(row.players.name)} <small style="color:#888;">(${type_str})</small></td>
-                        <td style="padding:8px; text-align:right; color:${color}; font-weight:bold;">${row.delta}</td>
-                    </tr>
-                `;
+                    const cls     = row.delta > 0 ? 'score-positive' : row.delta < 0 ? 'score-negative' : 'score-neutral';
+                    const typeStr = row.players.type === 'fixed' ? '固定' : '訪客';
+                    html += `<tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px;">${escapeHTML(row.players.name)} <small style="color:#888;">(${typeStr})</small></td>
+                        <td style="padding:8px; text-align:right;" class="${cls}">${row.delta}</td>
+                    </tr>`;
                 });
-                html += "</tbody></table>";
-
-                // 這裡放置表單刪除，從記一場移至此處
-                html += `
-                <div style="text-align: right; border-top: 2px solid #eee; padding-top: 15px;">
-                    <a href="session_new.html?date=${dateVal}" style="color: #3498db; text-decoration: none; margin-right: 15px;">✏️ 編輯此場紀錄</a>
-                    <button class="btn btn-danger" onclick="deleteSession(${session.id})" style="background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">🗑️ 刪除此場紀錄</button>
-                </div>
-            `;
-
+                html += `</tbody></table>
+                <div style="text-align:right; border-top:2px solid #eee; padding-top:15px;">
+                    <a href="session_new.html?date=${dateVal}" style="color:#3498db; text-decoration:none; margin-right:15px;">✏️ 編輯此場紀錄</a>
+                    <button onclick="deleteSession(${session.id})" class="btn btn-danger" style="padding:10px 15px; font-weight:bold;">🗑️ 刪除此場紀錄</button>
+                </div>`;
                 resultDiv.innerHTML = html;
             } catch (e) {
-                resultDiv.innerHTML = "載入失敗";
+                resultDiv.innerHTML = '<p style="color:red;">載入失敗</p>';
             }
         }
 
@@ -390,43 +249,39 @@
             try {
                 const { error } = await window.sb.from('sessions').delete().eq('id', sessionId);
                 if (error) throw error;
-                alert('刪除成功');
+                showMessage('刪除成功', true);
                 document.getElementById('session-detail-result').innerHTML = '';
-                // 若要自動重新載入或提示可以加這裡
+                refreshSessionCalendar(); // 重新抓日期、刷新日曆藍點
             } catch (e) {
                 console.error(e);
-                alert("刪除失敗");
+                showMessage('刪除失敗：' + e.message);
             }
         }
 
+        // ── 初始化 ────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
-            // 設定今日日期
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('session-date-picker').value = today;
+            const today  = new Date().toISOString().split('T')[0];
+            const params = new URLSearchParams(window.location.search);
+            const tabParam  = params.get('tab');
+            const dateParam = params.get('date');
 
+            // 先載入排行榜和玩家選單
             loadLeaderboard();
             loadPlayerOptions();
 
-            // 處理 URL 參數連動
-            const params = new URLSearchParams(window.location.search);
-            const tabParam = params.get('tab');
-            const dateParam = params.get('date');
-
-            if (tabParam) {
+            // 載入場次日期 → 初始化 flatpickr（帶入目標日期）
+            const targetDate = (tabParam === 'session' && dateParam) ? dateParam : today;
+            initSessionCalendar('session-date-picker', targetDate, loadSessionDetail).then(() => {
+                // URL 參數連動：直接跳到指定 tab
                 if (tabParam === 'session') {
                     switchTab('tab-session');
-                    if (dateParam) {
-                        document.getElementById('session-date-picker').value = dateParam;
-                    }
                     loadSessionDetail();
                 } else if (tabParam === 'player') {
                     switchTab('tab-player');
-                } else {
-                    switchTab('tab-stats');
                 }
-            }
+                // 預設統計 tab：切到場次 tab 時才自動載入（見 tab-btn 事件）
+            });
         });
-
     </script>
 </body>
 

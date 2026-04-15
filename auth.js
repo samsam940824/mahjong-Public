@@ -1,20 +1,14 @@
-// frontend/auth.js
+// auth.js
 
 async function checkAuth() {
     try {
         const { data: { session }, error } = await window.sb.auth.getSession();
-
-        if (error) {
-            console.error("Error fetching session:", error.message);
-        }
+        if (error) console.error("Error fetching session:", error.message);
 
         const isLoginPage = window.location.pathname.endsWith('login.html');
-
         if (!session && !isLoginPage) {
-            // Not logged in and trying to access a protected page
             window.location.href = 'login.html';
         } else if (session && isLoginPage) {
-            // Logged in but on login page, redirect to index
             window.location.href = 'index.html';
         }
     } catch (err) {
@@ -39,14 +33,12 @@ async function logout() {
 // Immediately check auth status when loaded
 checkAuth();
 
-// Fix BFCache vulnerability by ensuring auth check runs on cached pages
+// Fix BFCache vulnerability: auth check runs again on cached pages
 window.addEventListener('pageshow', async (event) => {
     if (event.persisted) {
         try {
             const { data: { session }, error } = await window.sb.auth.getSession();
-            if (error) {
-                console.error("Error fetching session on pageshow:", error.message);
-            }
+            if (error) console.error("Error fetching session on pageshow:", error.message);
             const isLoginPage = window.location.pathname.endsWith('login.html');
             if (!session && !isLoginPage) {
                 window.location.replace('login.html');
