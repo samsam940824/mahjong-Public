@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="./manifest.json">
+    <title>數據分析 - 麻將戰績</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="config.js"></script>
+    <script src="utils.js"></script>
+    <script src="auth.js"></script>
+
+    <header>
+        <a href="./index.html">🀄 麻將戰績紀錄</a>
+    </header>
+    <nav class="nav-links" aria-label="主導覽">
+        <a href="./index.html"        data-page="index.html">首頁</a>
+        <a href="./session_new.html"  data-page="session_new.html">記一場</a>
+        <a href="./players.html"      data-page="players.html">玩家</a>
+        <a href="./query.html"        data-page="query.html">查詢</a>
+        <a href="./stats.html"        data-page="stats.html">📊 數據</a>
+        <a href="./achievements.html" data-page="achievements.html">成就</a>
+        <a href="./export.html"       data-page="export.html">匯出</a>
+        <a href="#" class="nav-logout" onclick="logout(); return false;">登出</a>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h3>📊 概覽</h3>
+            <div id="overviewGrid" class="stat-grid">
+                <div class="stat-card"><div class="stat-label">總場次</div><div class="stat-value" id="ovTotalSessions">—</div></div>
+                <div class="stat-card"><div class="stat-label">總紀錄筆數</div><div class="stat-value" id="ovTotalLedgers">—</div></div>
+                <div class="stat-card"><div class="stat-label">活躍玩家</div><div class="stat-value" id="ovActivePlayers">—</div></div>
+                <div class="stat-card"><div class="stat-label">本月場次</div><div class="stat-value" id="ovMonthSessions">—</div></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📈 月度累積趨勢 (近 12 個月)</h3>
+            <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <h3>📊 單場分數分佈</h3>
+            <div class="chart-wrap"><canvas id="distChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <h3>⚔️ 頭對頭比較</h3>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+                <select id="h2hA" style="flex:1; min-width:140px; height:42px;" aria-label="玩家 A"></select>
+                <select id="h2hB" style="flex:1; min-width:140px; height:42px;" aria-label="玩家 B"></select>
+                <button class="btn btn-primary" onclick="renderH2H()" style="height:42px;">比較</button>
+            </div>
+            <div id="h2hSummary" class="text-center text-muted" style="margin-bottom:12px;">請選擇兩位玩家</div>
+            <div class="chart-wrap"><canvas id="h2hChart"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        let allLedgers = [];
+        let allPlayers = [];
+        let allSessions = [];
+
+        const PALETTE = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#06b6d4', '#a855f7', '#ef4444', '#84cc16', '#eab308', '#0ea5e9'];
+
+        Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.borderColor = 'rgba(226,232,240,.6)';
+
+        async function loadAll() {
+            try {
+                const [{ data: ledgers, error: lErr }, { data: players, error: pErr }, { data: sessions, error: sErr }] = await Promise.all([
+                    window.sb.from('ledgers').select('delta, player_id, players(id,name,type), sessions(date)'),
+                    window.sb.from('players').select('*'),
+                    window.sb.from('sessions').select('id, date')
+                ]);
+                if (lErr) throw lErr;
+                if (pErr) throw pErr;
+                if (sErr) throw sErr;
+
+                allLedgers = ledgers || [];
+                allPlayers = players || [];
+                allSessions = sessions || [];
+
+                renderOverview();
+                renderTrend();
+                renderDist();
+                populateH2HSelects();
+            } catch (e) {
+                console.error(e);
+                toast('載入失敗：' + e.message, 'error');
+            }
+        }
+
+        function renderOverview() {
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const monthSessions = allSessions.filter(s => s.date.startsWith(currentMonth)).length;
+            document.getElementById('ovTotalSessions').textContent = allSessions.length;
+            document.getElementById('ovTotalLedgers').textContent = allLedgers.length;
+            document.getElementById('ovActivePlayers').textContent = allPlayers.filter(p => p.active).length;
+            document.getElementById('ovMonthSessions').textContent = monthSessions;
+        }
+
+        function lastNMonths(n) {
+            const out = [];
+            const now = new Date();
+            for (let i = n - 1; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                out.push(d.toISOString().slice(0, 7));
+            }
+            return out;
+        }
+
+        function renderTrend() {
+            const months = lastNMonths(12);
+
+            // 找出總分前 6 名玩家
+            const totals = {};
+            allLedgers.forEach(l => {
+                if (!l.players) return;
+                totals[l.players.id] = (totals[l.players.id] || 0) + l.delta;
+            });
+            const topIds = Object.entries(totals)
+                .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                .slice(0, 6)
+                .map(([id]) => parseInt(id));
+
+            const datasets = topIds.map((pid, idx) => {
+                const player = allPlayers.find(p => p.id === pid);
+                if (!player) return null;
+                let cum = 0;
+                const data = months.map(m => {
+                    const monthSum = allLedgers
+                        .filter(l => l.players && l.players.id === pid && l.sessions && l.sessions.date.startsWith(m))
+                        .reduce((s, l) => s + l.delta, 0);
+                    cum += monthSum;
+                    return cum;
+                });
+                const color = PALETTE[idx % PALETTE.length];
+                return {
+                    label: player.name,
+                    data,
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.3,
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: false
+                };
+            }).filter(Boolean);
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (window._trendChart) window._trendChart.destroy();
+            window._trendChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: months, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14 } } },
+                    scales: {
+                        y: { grid: { color: 'rgba(226,232,240,.4)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderDist() {
+            // 將 delta 分箱
+            const bins = [
+                { label: '-1000↓', min: -Infinity, max: -1000 },
+                { label: '-1000~-500', min: -1000, max: -500 },
+                { label: '-500~-100', min: -500, max: -100 },
+                { label: '-100~0', min: -100, max: 0 },
+                { label: '0~100', min: 0, max: 100 },
+                { label: '100~500', min: 100, max: 500 },
+                { label: '500~1000', min: 500, max: 1000 },
+                { label: '1000↑', min: 1000, max: Infinity },
+            ];
+            const counts = bins.map(b => allLedgers.filter(l => l.delta > b.min && l.delta <= b.max).length);
+
+            const ctx = document.getElementById('distChart').getContext('2d');
+            if (window._distChart) window._distChart.destroy();
+            window._distChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bins.map(b => b.label),
+                    datasets: [{
+                        label: '單筆數',
+                        data: counts,
+                        backgroundColor: bins.map(b => b.max <= 0 ? 'rgba(239,68,68,.7)' : 'rgba(34,197,94,.7)'),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(226,232,240,.4)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function populateH2HSelects() {
+            const a = document.getElementById('h2hA');
+            const b = document.getElementById('h2hB');
+            a.innerHTML = b.innerHTML = '<option value="">-- 選擇玩家 --</option>';
+            allPlayers.forEach(p => {
+                const optA = document.createElement('option');
+                optA.value = p.id; optA.textContent = p.name;
+                a.appendChild(optA);
+                b.appendChild(optA.cloneNode(true));
+            });
+        }
+
+        function renderH2H() {
+            const aid = parseInt(document.getElementById('h2hA').value);
+            const bid = parseInt(document.getElementById('h2hB').value);
+            if (!aid || !bid || aid === bid) {
+                toast('請選擇兩位不同的玩家', 'warn');
+                return;
+            }
+
+            // 找兩人共同的場次
+            const aSessions = new Set(allLedgers.filter(l => l.player_id === aid).map(l => l.sessions && l.sessions.date).filter(Boolean));
+            const bSessions = new Set(allLedgers.filter(l => l.player_id === bid).map(l => l.sessions && l.sessions.date).filter(Boolean));
+            const shared = [...aSessions].filter(d => bSessions.has(d)).sort();
+
+            if (shared.length === 0) {
+                document.getElementById('h2hSummary').textContent = '兩位玩家沒有共同場次';
+                if (window._h2hChart) { window._h2hChart.destroy(); window._h2hChart = null; }
+                return;
+            }
+
+            const aDeltas = shared.map(d => allLedgers.filter(l => l.player_id === aid && l.sessions && l.sessions.date === d).reduce((s, l) => s + l.delta, 0));
+            const bDeltas = shared.map(d => allLedgers.filter(l => l.player_id === bid && l.sessions && l.sessions.date === d).reduce((s, l) => s + l.delta, 0));
+
+            const aName = allPlayers.find(p => p.id === aid).name;
+            const bName = allPlayers.find(p => p.id === bid).name;
+            const aTotal = aDeltas.reduce((s, v) => s + v, 0);
+            const bTotal = bDeltas.reduce((s, v) => s + v, 0);
+            const aWins = aDeltas.filter((v, i) => v > bDeltas[i]).length;
+
+            document.getElementById('h2hSummary').innerHTML =
+                `共 <strong>${shared.length}</strong> 場 ｜ <strong>${aName}</strong> 贏 <strong>${aWins}</strong> 場、累積 <span class="${aTotal>0?'score-positive':'score-negative'}">${aTotal>0?'+':''}${aTotal}</span> ｜ <strong>${bName}</strong> 累積 <span class="${bTotal>0?'score-positive':'score-negative'}">${bTotal>0?'+':''}${bTotal}</span>`;
+
+            const ctx = document.getElementById('h2hChart').getContext('2d');
+            if (window._h2hChart) window._h2hChart.destroy();
+            window._h2hChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: shared,
+                    datasets: [
+                        { label: aName, data: aDeltas, backgroundColor: PALETTE[0] + 'cc', borderRadius: 4 },
+                        { label: bName, data: bDeltas, backgroundColor: PALETTE[1] + 'cc', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        y: { grid: { color: 'rgba(226,232,240,.4)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAll);
+    </script>
+</body>
+
+</html>

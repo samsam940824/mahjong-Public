@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="./manifest.json">
     <title>個人成就 - 麻將戰績</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -19,19 +21,18 @@
     <header>
         <a href="./index.html">🀄 麻將戰績紀錄</a>
     </header>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="主導覽">
         <a href="./index.html"        data-page="index.html">首頁</a>
         <a href="./session_new.html"  data-page="session_new.html">記一場</a>
         <a href="./players.html"      data-page="players.html">玩家</a>
         <a href="./query.html"        data-page="query.html">查詢</a>
+        <a href="./stats.html"        data-page="stats.html">📊 數據</a>
         <a href="./achievements.html" data-page="achievements.html">成就</a>
         <a href="./export.html"       data-page="export.html">匯出</a>
         <a href="#" class="nav-logout" onclick="logout(); return false;">登出</a>
     </nav>
 
     <div class="container">
-        <div id="msgAlert" class="alert"></div>
-
         <div class="card">
             <h3>
                 🌟 新增 / 編輯成就
@@ -42,17 +43,17 @@
                 <input type="hidden" id="ach_id" value="">
 
                 <div class="form-group">
-                    <label>📅 達成日期（有成就的日期顯示藍點）</label>
+                    <label for="ach_date">📅 達成日期（有成就的日期顯示藍點）</label>
                     <input type="text" id="ach_date" placeholder="選擇日期..." required readonly>
                 </div>
 
                 <div class="form-group">
-                    <label>🏆 成就名稱 (必填)</label>
+                    <label for="ach_name">🏆 成就名稱 (必填)</label>
                     <input type="text" id="ach_name" required placeholder="例如：自摸天胡、單場最高分...">
                 </div>
 
                 <div class="form-group">
-                    <label>👤 達成玩家 (必填)</label>
+                    <label for="ach_player">👤 達成玩家 (必填)</label>
                     <select id="ach_player" required>
                         <option value="">-- 請選擇玩家 --</option>
                         <optgroup id="active-players-group"   label="啟用的玩家"></optgroup>
@@ -61,14 +62,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label>🔗 關聯場次 (選填)</label>
+                    <label for="ach_session">🔗 關聯場次 (選填)</label>
                     <select id="ach_session">
                         <option value="0">-- 無關聯場次 --</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>📝 備註事項 (選填)</label>
+                    <label for="ach_note">📝 備註事項 (選填)</label>
                     <input type="text" id="ach_note" placeholder="例如：手牌很旺...">
                 </div>
 
@@ -90,7 +91,7 @@
                     </tr>
                 </thead>
                 <tbody id="achievementsTableBody">
-                    <tr><td colspan="4" class="text-center">載入中...</td></tr>
+                    <tr><td colspan="4"><div class="skeleton" style="height:60px;"></div></td></tr>
                 </tbody>
             </table>
         </div>
@@ -99,6 +100,22 @@
     <script>
         let playersData = [];
         let sessionsData = [];
+
+        function fireConfetti() {
+            const colors = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#06b6d4', '#a855f7'];
+            const count = 70;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'confetti-piece';
+                p.style.left = Math.random() * 100 + 'vw';
+                p.style.background = colors[i % colors.length];
+                p.style.animationDelay = (Math.random() * 0.3) + 's';
+                p.style.animationDuration = (1.8 + Math.random() * 1.2) + 's';
+                p.style.transform = `rotate(${Math.random() * 360}deg)`;
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 3500);
+            }
+        }
 
         function resetForm() {
             document.getElementById('ach_id').value = '';
@@ -133,7 +150,6 @@
                 playersData  = players;
                 sessionsData = sessions;
 
-                // 渲染玩家下拉
                 const activeGroup   = document.getElementById('active-players-group');
                 const inactiveGroup = document.getElementById('inactive-players-group');
                 activeGroup.innerHTML = inactiveGroup.innerHTML = '';
@@ -144,7 +160,6 @@
                     (p.active ? activeGroup : inactiveGroup).appendChild(opt);
                 });
 
-                // 渲染場次下拉
                 const sessionSelect = document.getElementById('ach_session');
                 sessionSelect.innerHTML = '<option value="0">-- 無關聯場次 --</option>';
                 sessionsData.forEach(s => {
@@ -154,14 +169,13 @@
                     sessionSelect.appendChild(opt);
                 });
 
-                // 渲染成就表格
                 const formatted = achievements.map(a => ({
                     id: a.id, date: a.date, name: a.name, note: a.note,
                     player_id: a.player_id,
                     player_name: a.players ? a.players.name : '未知',
                     session_id: a.session_id,
                     session_date: a.sessions ? a.sessions.date : null
-                }));
+                })).sort((a, b) => b.date.localeCompare(a.date));
                 renderTable(formatted);
 
                 if (!document.getElementById('ach_id').value) {
@@ -169,30 +183,30 @@
                 }
             } catch (e) {
                 console.error(e);
-                showMessage("載入失敗：" + e.message);
+                toast("載入失敗：" + e.message, 'error');
             }
         }
 
         function renderTable(achievements) {
             const tbody = document.getElementById('achievementsTableBody');
             if (achievements.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="color:#888;">目前沒有成就紀錄。</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">目前沒有成就紀錄。</td></tr>';
                 return;
             }
             tbody.innerHTML = '';
             achievements.forEach(a => {
                 const tr = document.createElement('tr');
-                let nameHtml = `<strong>${escapeHTML(a.name)}</strong>`;
+                let nameHtml = `<strong>🌟 ${escapeHTML(a.name)}</strong>`;
                 if (a.note) nameHtml += `<br><span class="text-muted">${escapeHTML(a.note)}</span>`;
-                if (a.session_id) nameHtml += ` <a href="query.html?tab=session&date=${a.date}" style="font-size:0.8em; color:#3498db; text-decoration:none;">[查看場次]</a>`;
+                if (a.session_id) nameHtml += ` <a href="query.html?tab=session&date=${a.date}" style="font-size:.8em; color:var(--c-primary-d); text-decoration:none;">[查看場次]</a>`;
 
                 tr.innerHTML = `
                     <td>${escapeHTML(a.date)}</td>
                     <td>${nameHtml}</td>
                     <td>${escapeHTML(a.player_name)}</td>
-                    <td>
-                        <button class="btn btn-warning" style="padding:6px 12px; font-size:0.9rem; margin-right:5px;" data-action="edit">編輯</button>
-                        <button class="btn btn-danger"  style="padding:6px 12px; font-size:0.9rem;" data-action="delete">刪除</button>
+                    <td style="white-space:nowrap;">
+                        <button class="btn btn-warning" style="padding:6px 12px; font-size:.85rem; margin-right:5px;" data-action="edit">編輯</button>
+                        <button class="btn btn-danger"  style="padding:6px 12px; font-size:.85rem;" data-action="delete" aria-label="刪除 ${escapeHTML(a.name)}">刪除</button>
                     </td>
                 `;
                 tr.querySelector('[data-action="edit"]').addEventListener('click',   () => editAchievement(a));
@@ -243,15 +257,16 @@
                 }
 
                 if (error) {
-                    showMessage(error.message || "儲存失敗");
+                    toast(error.message || "儲存失敗", 'error');
                 } else {
-                    showMessage(`成就${editId ? '更新' : '新增'}成功！`, true);
+                    toast(`成就${editId ? '更新' : '新增'}成功！`, 'success');
+                    if (!editId) fireConfetti();
                     resetForm();
                     loadData();
-                    refreshSessionCalendar(); // 刷新藍點
+                    refreshSessionCalendar();
                 }
             } catch (e) {
-                showMessage("網路連線失敗");
+                toast("網路連線失敗", 'error');
             } finally {
                 btn.disabled = false;
             }
@@ -262,23 +277,22 @@
             try {
                 const { error } = await window.sb.from('achievements').delete().eq('id', id);
                 if (error) {
-                    showMessage(error.message || "刪除失敗");
+                    toast(error.message || "刪除失敗", 'error');
                 } else {
-                    showMessage("成就已刪除", true);
+                    toast("成就已刪除", 'success');
                     loadData();
-                    refreshSessionCalendar(); // 刷新藍點
+                    refreshSessionCalendar();
                 }
             } catch (e) {
-                showMessage("網路連線失敗");
+                toast("網路連線失敗", 'error');
             }
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // 初始化日曆，藍點來源為 achievements 表（非 sessions）
             await initSessionCalendar(
                 'ach_date',
                 new Date(),
-                null, // 選日期不需要自動 callback
+                null,
                 async () => {
                     const { data, error } = await window.sb.from('achievements').select('date');
                     if (error) throw error;

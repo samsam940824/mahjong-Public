@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="./manifest.json">
     <title>麻將戰績 - 登入</title>
     <link rel="stylesheet" href="style.css">
     <style>
@@ -79,12 +81,12 @@
                 const { data, error } = await window.sb.auth.signInWithPassword({ email, password });
 
                 if (error) {
-                    showMessage("登入失敗：" + error.message);
+                    toast("登入失敗：" + error.message, 'error');
                 } else if (data.session) {
                     window.location.href = 'index.html';
                 }
             } catch (err) {
-                showMessage("網路錯誤：" + err.message);
+                toast("網路錯誤：" + err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = '登入';

@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="./manifest.json">
     <title>資料匯出 - 麻將戰績</title>
     <link rel="stylesheet" href="style.css">
     <style>
@@ -58,11 +60,12 @@
     <header>
         <a href="./index.html">🀄 麻將戰績紀錄</a>
     </header>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="主導覽">
         <a href="./index.html"        data-page="index.html">首頁</a>
         <a href="./session_new.html"  data-page="session_new.html">記一場</a>
         <a href="./players.html"      data-page="players.html">玩家</a>
         <a href="./query.html"        data-page="query.html">查詢</a>
+        <a href="./stats.html"        data-page="stats.html">📊 數據</a>
         <a href="./achievements.html" data-page="achievements.html">成就</a>
         <a href="./export.html"       data-page="export.html">匯出</a>
         <a href="#" class="nav-logout" onclick="logout(); return false;">登出</a>
@@ -118,7 +121,7 @@
                 if (error) throw error;
 
                 if (!ledgers || ledgers.length === 0) {
-                    showMessage("目前無戰績資料可匯出！");
+                    toast("目前無戰績資料可匯出！", 'warn');
                     return;
                 }
 
@@ -142,7 +145,7 @@
                 const sortedPlayers = Array.from(playerNames).sort();
 
                 if (sortedDates.length === 0) {
-                    showMessage("該區間無戰績資料可匯出！");
+                    toast("該區間無戰績資料可匯出！", 'warn');
                     return;
                 }
 
@@ -162,9 +165,10 @@
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
+                toast(`CSV 已下載（${sortedDates.length} 場 ${sortedPlayers.length} 人）`, 'success');
             } catch (e) {
                 console.error("匯出失敗:", e);
-                showMessage("匯出失敗：" + e.message);
+                toast("匯出失敗：" + e.message, 'error');
             } finally {
                 btnMonth.disabled = btnAll.disabled = false;
             }

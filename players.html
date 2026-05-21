@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="./manifest.json">
     <title>玩家管理 - 麻將戰績</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -17,28 +19,27 @@
     <header>
         <a href="./index.html">🀄 麻將戰績紀錄</a>
     </header>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="主導覽">
         <a href="./index.html"        data-page="index.html">首頁</a>
         <a href="./session_new.html"  data-page="session_new.html">記一場</a>
         <a href="./players.html"      data-page="players.html">玩家</a>
         <a href="./query.html"        data-page="query.html">查詢</a>
+        <a href="./stats.html"        data-page="stats.html">📊 數據</a>
         <a href="./achievements.html" data-page="achievements.html">成就</a>
         <a href="./export.html"       data-page="export.html">匯出</a>
         <a href="#" class="nav-logout" onclick="logout(); return false;">登出</a>
     </nav>
 
     <div class="container">
-        <div id="msgAlert" class="alert"></div>
-
         <div class="card">
             <h3>新增玩家</h3>
             <form id="createForm" onsubmit="createPlayer(event)">
                 <div class="form-group">
-                    <label>名稱</label>
+                    <label for="createName">名稱</label>
                     <input type="text" id="createName" placeholder="輸入名字 (例如: 三叔公)" required>
                 </div>
                 <div class="form-group">
-                    <label>類型</label>
+                    <label for="createType">類型</label>
                     <select id="createType">
                         <option value="fixed">固定玩家 (家人)</option>
                         <option value="guest">訪客 (偶爾來)</option>
@@ -49,7 +50,7 @@
         </div>
 
         <div class="card">
-            <h3>玩家列表</h3>
+            <h3>玩家列表 <span class="text-muted" style="font-size:.8rem; font-weight:500;">點名字查看詳情</span></h3>
             <table>
                 <thead>
                     <tr>
@@ -59,24 +60,24 @@
                     </tr>
                 </thead>
                 <tbody id="playersTableBody">
-                    <tr><td colspan="3" class="text-center" style="padding:20px;">載入中...</td></tr>
+                    <tr><td colspan="3"><div class="skeleton" style="height:60px;"></div></td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <!-- Edit Modal -->
-    <div id="editModal" class="modal">
+    <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
         <div class="modal-content">
-            <h3>編輯玩家</h3>
+            <h3 id="editModalTitle">編輯玩家</h3>
             <form id="editForm" onsubmit="updatePlayer(event)">
                 <input type="hidden" id="editId">
                 <div class="form-group">
-                    <label>名稱</label>
+                    <label for="editName">名稱</label>
                     <input type="text" id="editName" required>
                 </div>
                 <div class="form-group">
-                    <label>類型</label>
+                    <label for="editType">類型</label>
                     <select id="editType">
                         <option value="fixed">固定玩家 (家人)</option>
                         <option value="guest">訪客 (偶爾來)</option>
@@ -90,6 +91,15 @@
         </div>
     </div>
 
+    <!-- Detail Modal -->
+    <div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <div class="modal-content" style="max-width:520px;">
+            <h3 id="detailModalTitle">玩家詳情</h3>
+            <div id="detailModalBody"><div class="skeleton" style="height:160px;"></div></div>
+            <button type="button" class="btn btn-secondary btn-block" style="margin-top:14px;" onclick="closeDetailModal()">關閉</button>
+        </div>
+    </div>
+
     <script>
         async function loadPlayers() {
             try {
@@ -100,7 +110,7 @@
                 tbody.innerHTML = '';
 
                 if (!players || players.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-center" style="padding:20px; color:#888;">目前沒有玩家</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">目前沒有玩家</td></tr>';
                     return;
                 }
 
@@ -108,12 +118,17 @@
                     const tr = document.createElement('tr');
 
                     const tdName = document.createElement('td');
-                    tdName.textContent = player.name;
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = player.name;
+                    link.style.cssText = 'color:var(--c-primary-d); text-decoration:none; font-weight:600;';
+                    link.onclick = (e) => { e.preventDefault(); openDetailModal(player); };
+                    tdName.appendChild(link);
 
                     const tdType = document.createElement('td');
                     tdType.innerHTML = player.type === 'fixed'
-                        ? '<span style="color:#2980b9;">固定</span>'
-                        : '<span style="color:#e67e22;">訪客</span>';
+                        ? '<span style="color:#2563eb; font-weight:600;">固定</span>'
+                        : '<span style="color:#ea580c; font-weight:600;">訪客</span>';
 
                     const tdActions = document.createElement('td');
                     tdActions.className = 'text-right';
@@ -121,20 +136,21 @@
 
                     const editBtn = document.createElement('button');
                     editBtn.className = 'btn btn-secondary';
-                    editBtn.style.cssText = 'padding:5px 10px; font-size:0.8rem; margin-right:5px;';
+                    editBtn.style.cssText = 'padding:6px 12px; font-size:.8rem; margin-right:5px;';
                     editBtn.textContent = '編輯';
                     editBtn.onclick = () => openEditModal(player.id, player.name, player.type);
 
                     const toggleBtn = document.createElement('button');
-                    toggleBtn.style.cssText = 'padding:5px 10px; font-size:0.8rem; margin-right:5px;';
+                    toggleBtn.style.cssText = 'padding:6px 12px; font-size:.8rem; margin-right:5px;';
                     toggleBtn.className = player.active ? 'btn btn-danger' : 'btn btn-success';
                     toggleBtn.textContent = player.active ? '停用' : '啟用';
                     toggleBtn.onclick = () => togglePlayer(player.id, !player.active);
 
                     const delBtn = document.createElement('button');
                     delBtn.className = 'btn btn-dark';
-                    delBtn.style.cssText = 'padding:5px 10px; font-size:0.8rem;';
+                    delBtn.style.cssText = 'padding:6px 12px; font-size:.8rem;';
                     delBtn.textContent = '🗑️';
+                    delBtn.setAttribute('aria-label', `刪除 ${player.name}`);
                     delBtn.onclick = () => {
                         if (confirm('確定要刪除嗎？若有戰績將無法刪除。')) deletePlayer(player.id);
                     };
@@ -145,7 +161,7 @@
                 });
             } catch (e) {
                 console.error(e);
-                showMessage("載入失敗: " + e.message);
+                toast("載入失敗: " + e.message, 'error');
             }
         }
 
@@ -159,13 +175,14 @@
             try {
                 const { error } = await window.sb.from('players').insert([{ name, type, active: true }]);
                 if (error) {
-                    showMessage(error.code === '23505' ? "新增失敗: 玩家名稱已存在" : "新增失敗: " + error.message);
+                    toast(error.code === '23505' ? "玩家名稱已存在" : "新增失敗: " + error.message, 'error');
                 } else {
                     document.getElementById('createForm').reset();
+                    toast('玩家已新增', 'success');
                     loadPlayers();
                 }
             } catch (e) {
-                showMessage("新增失敗: " + e.message);
+                toast("新增失敗: " + e.message, 'error');
             } finally {
                 btn.disabled = false;
             }
@@ -182,6 +199,57 @@
             document.getElementById('editModal').style.display = 'none';
         }
 
+        async function openDetailModal(player) {
+            const modal = document.getElementById('detailModal');
+            const title = document.getElementById('detailModalTitle');
+            const body  = document.getElementById('detailModalBody');
+            title.textContent = `${player.name} 的詳情`;
+            body.innerHTML = '<div class="skeleton" style="height:160px;"></div>';
+            modal.style.display = 'flex';
+
+            try {
+                const { data: history, error } = await window.sb
+                    .from('ledgers').select('delta, sessions(date)').eq('player_id', player.id);
+                if (error) throw error;
+
+                if (!history || history.length === 0) {
+                    body.innerHTML = '<p class="empty-state">該玩家還沒有戰績紀錄</p>';
+                    return;
+                }
+
+                const total = history.reduce((s, r) => s + r.delta, 0);
+                const wins = history.filter(r => r.delta > 0).length;
+                const losses = history.filter(r => r.delta < 0).length;
+                const high = Math.max(...history.map(r => r.delta));
+                const low  = Math.min(...history.map(r => r.delta));
+                const avg  = (total / history.length).toFixed(1);
+
+                let maxWinStreak = 0, maxLoseStreak = 0, curWin = 0, curLose = 0;
+                history.slice().sort((a, b) => a.sessions.date.localeCompare(b.sessions.date)).forEach(r => {
+                    if (r.delta > 0) { curWin++; curLose = 0; maxWinStreak = Math.max(maxWinStreak, curWin); }
+                    else if (r.delta < 0) { curLose++; curWin = 0; maxLoseStreak = Math.max(maxLoseStreak, curLose); }
+                    else { curWin = 0; curLose = 0; }
+                });
+
+                body.innerHTML = `
+                <div class="stat-grid">
+                    <div class="stat-card"><div class="stat-label">總輸贏</div><div class="stat-value ${total>0?'score-positive':total<0?'score-negative':''}">${total>0?'+':''}${total}</div></div>
+                    <div class="stat-card"><div class="stat-label">場次</div><div class="stat-value">${history.length}</div></div>
+                    <div class="stat-card"><div class="stat-label">平均</div><div class="stat-value" style="font-size:1.15rem;">${avg}</div></div>
+                    <div class="stat-card"><div class="stat-label">勝 / 負</div><div class="stat-value" style="font-size:1.1rem;">${wins} / ${losses}</div></div>
+                    <div class="stat-card"><div class="stat-label">最高 / 最低</div><div class="stat-value" style="font-size:1rem;"><span class="score-positive">+${high}</span> / <span class="score-negative">${low}</span></div></div>
+                    <div class="stat-card"><div class="stat-label">最長連勝 / 連敗</div><div class="stat-value" style="font-size:1.05rem;">${maxWinStreak} / ${maxLoseStreak}</div></div>
+                </div>
+                <p style="text-align:center; margin-top:12px;"><a href="query.html?tab=player" style="color:var(--c-primary-d); font-weight:600; text-decoration:none;">➔ 查看完整紀錄</a></p>`;
+            } catch (e) {
+                body.innerHTML = '<p class="empty-state" style="color:var(--c-danger);">載入失敗</p>';
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
         async function updatePlayer(e) {
             e.preventDefault();
             const id   = document.getElementById('editId').value;
@@ -193,13 +261,14 @@
             try {
                 const { error } = await window.sb.from('players').update({ name, type }).eq('id', id);
                 if (error) {
-                    showMessage(error.code === '23505' ? "更新失敗: 玩家名稱已存在" : "更新失敗: " + error.message);
+                    toast(error.code === '23505' ? "玩家名稱已存在" : "更新失敗: " + error.message, 'error');
                 } else {
                     closeEditModal();
+                    toast('已更新', 'success');
                     loadPlayers();
                 }
             } catch (e) {
-                showMessage("更新失敗: " + e.message);
+                toast("更新失敗: " + e.message, 'error');
             } finally {
                 btn.disabled = false;
             }
@@ -209,9 +278,10 @@
             try {
                 const { error } = await window.sb.from('players').update({ active: targetActive }).eq('id', id);
                 if (error) throw error;
+                toast(targetActive ? '已啟用' : '已停用', 'success');
                 loadPlayers();
             } catch (e) {
-                showMessage("切換失敗: " + e.message);
+                toast("切換失敗: " + e.message, 'error');
             }
         }
 
@@ -219,14 +289,23 @@
             try {
                 const { error } = await window.sb.from('players').delete().eq('id', id);
                 if (error) {
-                    showMessage(error.code === '23503' ? "無法刪除：該玩家已有戰績或成就" : "刪除失敗: " + error.message);
+                    toast(error.code === '23503' ? "無法刪除：該玩家已有戰績或成就" : "刪除失敗: " + error.message, 'error');
                 } else {
+                    toast('已刪除', 'success');
                     loadPlayers();
                 }
             } catch (e) {
-                showMessage("刪除失敗: " + e.message);
+                toast("刪除失敗: " + e.message, 'error');
             }
         }
+
+        // ESC 關閉 modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeEditModal(); closeDetailModal(); }
+        });
+        // 點 modal 背景關閉
+        document.getElementById('editModal').addEventListener('click', (e) => { if (e.target.id === 'editModal') closeEditModal(); });
+        document.getElementById('detailModal').addEventListener('click', (e) => { if (e.target.id === 'detailModal') closeDetailModal(); });
 
         document.addEventListener('DOMContentLoaded', loadPlayers);
     </script>
