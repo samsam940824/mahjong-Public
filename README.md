@@ -29,3 +29,13 @@
    python -m http.server 8000
    ```
 4. 打開瀏覽器前往 `http://localhost:8000` 即可開始使用。
+
+## ⏰ Supabase Keepalive
+
+GitHub Actions 會透過 `.github/workflows/supabase-keepalive.yml` 每週一、四 09:15（Asia/Taipei）自動呼叫 Supabase REST API 一次，降低 Free Plan 專案因低活動量被暫停的機率。
+
+預設會查詢 `players?select=id&limit=1`，目前此專案回應 HTTP 200。workflow 會優先讀取 GitHub repository secrets `SUPABASE_URL`、`SUPABASE_ANON_KEY`；如果沒有設定，就會沿用 `config.js` 內的設定。若之後要改查其他表，可在 GitHub repository variables 新增 `SUPABASE_KEEPALIVE_TABLE`。
+
+需要立即測試時，可到 GitHub Actions 的 `Supabase Keepalive` workflow 手動執行 `workflow_dispatch`。
+
+注意：若此 repository 是 public 且連續 60 天沒有 repository activity，GitHub 可能會自動停用 scheduled workflows，屆時需到 Actions 頁面重新啟用。
